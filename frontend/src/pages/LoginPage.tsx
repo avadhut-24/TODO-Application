@@ -1,6 +1,6 @@
 // src/pages/Login.tsx
-import { useAuth } from '../context/AuthContext';
-import type { User } from '../context/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
+import type { User } from '../contexts/AuthContext';
 import { useState } from 'react';
 import axios from '../api/axios';
 import background from '../assets/background.png';

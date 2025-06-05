@@ -1,10 +1,17 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import axios from '../api/axios';
+import { useSocketContext } from '../contexts/SocketContext';
 import AddTaskModal from '../components/AddTaskModal';
 import DeleteTaskModal from '../components/DeleteTaskModal';
 import ShareListModal from '../components/ShareListModal';
-import { useSocket } from '../hooks/useSocket';
+
+interface AxiosErrorType {
+  response?: {
+    status: number;
+    data: { message: string };
+  };
+}
 
 interface Task {
   _id: string;
@@ -51,7 +58,7 @@ interface PersonAccess {
 const TaskPage = () => {
   const { listId } = useParams<{ listId: string }>();
   const navigate = useNavigate();
-  const socket = useSocket(listId!);
+  const { socket, joinList, leaveList } = useSocketContext();
   
   const [listTitle, setListTitle] = useState('Brainstorming over things');
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -64,8 +71,7 @@ const TaskPage = () => {
 
   const handleAddTask = async (taskData: { title: string; status: string; priority: string }) => {
     try {
-      console.log('handleAddTask', listId);
-      await axios.post<Task>(`/tasks`, {
+      await axios.post<Task>(`/tasks/${listId}`, {
         name: taskData.title,
         status: taskData.status,
         priority: taskData.priority,
@@ -75,8 +81,12 @@ const TaskPage = () => {
       const updatedList = await axios.get<ListResponse>(`/lists/${listId}`);
       setTasks(updatedList.data.tasks);
       setIsAddTaskModalOpen(false);
-    } catch (err) {
-      console.error('Failed to add task:', err);
+    } catch (error: unknown) {
+      if (error instanceof Error && 'response' in error && (error as AxiosErrorType).response?.status === 403) {
+        alert((error as AxiosErrorType).response?.data.message);
+      } else {
+        console.error('Failed to add task:', error);
+      }
     }
   };
 
@@ -84,18 +94,23 @@ const TaskPage = () => {
     try {
       if (!selectedTask) return;
       
-      await axios.put<Task>(`/tasks/${selectedTask._id}`, {
+      await axios.put<Task>(`/tasks/${listId}/${selectedTask._id}`, {
         name: taskData.title,
         status: taskData.status,
-        priority: taskData.priority
+        priority: taskData.priority,
+        listId: listId
       });
       
       const updatedList = await axios.get<ListResponse>(`/lists/${listId}`);
       setTasks(updatedList.data.tasks);
       setIsEditTaskModalOpen(false);
       setSelectedTask(null);
-    } catch (err) {
-      console.error('Failed to update task:', err);
+    } catch (error: unknown) {
+      if (error instanceof Error && 'response' in error && (error as AxiosErrorType).response?.status === 403) {
+        alert((error as AxiosErrorType).response?.data.message);
+      } else {
+        console.error('Failed to update task:', error);
+      }
     }
   };
 
@@ -103,14 +118,18 @@ const TaskPage = () => {
     try {
       if (!selectedTask) return;
       
-      await axios.delete(`/tasks/${selectedTask._id}`);
+      await axios.delete(`/tasks/${listId}/${selectedTask._id}`);
       
       const updatedList = await axios.get<ListResponse>(`/lists/${listId}`);
       setTasks(updatedList.data.tasks);
       setIsDeleteTaskModalOpen(false);
       setSelectedTask(null);
-    } catch (err) {
-      console.error('Failed to delete task:', err);
+    } catch (error: unknown) {
+      if (error instanceof Error && 'response' in error && (error as AxiosErrorType).response?.status === 403) {
+        alert((error as AxiosErrorType).response?.data.message);
+      } else {
+        console.error('Failed to delete task:', error);
+      }
     }
   };
 
@@ -160,7 +179,11 @@ const TaskPage = () => {
       setPeopleWithAccess(people);
       setIsShareModalOpen(false);
     } catch (err) {
-      console.error('Failed to share list:', err);
+      if (err instanceof Error && 'response' in err && (err as AxiosErrorType).response?.status === 403) {
+        alert((err as AxiosErrorType).response?.data.message);
+      } else {
+        console.error('Failed to share list:', err);
+      }
     }
   };
 
@@ -198,20 +221,24 @@ const TaskPage = () => {
       ];
       setPeopleWithAccess(people);
     } catch (err) {
-      console.error('Failed to remove share:', err);
+      if (err instanceof Error && 'response' in err && (err as AxiosErrorType).response?.status === 403) {
+        alert((err as AxiosErrorType).response?.data.message);
+      } else {
+        console.error('Failed to remove share:', err);
+      }
     }
   };
 
+  // Initial data fetch
   useEffect(() => {
-    const fetchTasks = async () => {
+    const fetchListData = async () => {
       try {
         const res = await axios.get<ListResponse>(`/lists/${listId}`);
-        setTasks(res.data.tasks);
         setListTitle(res.data.title);
+        setTasks(res.data.tasks || []);
         
         // Set people with access including owner
         const people = [
-          // Add owner first
           {
             id: res.data.owner._id,
             name: `${res.data.owner.firstName} ${res.data.owner.lastName}`,
@@ -220,7 +247,6 @@ const TaskPage = () => {
             access: 'Edit' as const,
             isOwner: true
           },
-          // Add other users with access
           ...res.data.sharedWith.map((share) => ({
             id: share.user._id,
             name: `${share.user.firstName} ${share.user.lastName}`,
@@ -232,25 +258,34 @@ const TaskPage = () => {
         ];
         setPeopleWithAccess(people);
       } catch (err) {
-        console.error('Failed to fetch tasks:', err);
+        console.error('Failed to fetch list data:', err);
       }
     };
 
-    fetchTasks();
+    if (listId) {
+      fetchListData();
+    }
   }, [listId]);
 
-  // Listen for WebSocket updates
+  // Socket room management
+  useEffect(() => {
+    if (listId) {
+      joinList(listId);
+      return () => leaveList(listId);
+    }
+  }, [listId, joinList, leaveList]);
+
+  // Socket event listeners
   useEffect(() => {
     if (socket) {
-      socket.on('listUpdated', (updatedList: ListResponse) => {
-        console.log('Received list update:', updatedList);
-        // Update all list data
+      console.log('Setting up listUpdated listener in TaskPage');
+      
+      const handleListUpdate = (updatedList: ListResponse) => {
+        console.log('Received listUpdated event:', updatedList);
         setListTitle(updatedList.title);
         setTasks(updatedList.tasks || []);
         
-        // Update people with access including owner
         const people = [
-          // Add owner first
           {
             id: updatedList.owner._id,
             name: `${updatedList.owner.firstName} ${updatedList.owner.lastName}`,
@@ -259,7 +294,6 @@ const TaskPage = () => {
             access: 'Edit' as const,
             isOwner: true
           },
-          // Add other users with access
           ...updatedList.sharedWith.map((share) => ({
             id: share.user._id,
             name: `${share.user.firstName} ${share.user.lastName}`,
@@ -270,11 +304,17 @@ const TaskPage = () => {
           }))
         ];
         setPeopleWithAccess(people);
-      });
+      };
+
+      socket.on('listUpdated', handleListUpdate);
+      console.log('listUpdated listener set up successfully');
 
       return () => {
-        socket.off('listUpdated');
+        console.log('Cleaning up listUpdated listener');
+        socket.off('listUpdated', handleListUpdate);
       };
+    } else {
+      console.warn('Socket not available in TaskPage');
     }
   }, [socket]);
 

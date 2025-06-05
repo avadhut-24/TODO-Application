@@ -6,12 +6,12 @@ import { getIO } from '../socket.js';
 
 // Create a new list
 export const createList = async (req: Request, res: Response): Promise<void> => {
-  console.log(req.user);
+
   try {
     const { title } = req.body;
     const list = new List({
       title,
-      owner: req.user
+      owner: req.user._id
     });
     await list.save();
     res.status(201).json(list);
@@ -25,8 +25,8 @@ export const getLists = async (req: Request, res: Response): Promise<void> => {
   try {
     const lists = await List.find({
       $or: [
-        { owner: req.user },
-        { 'sharedWith.user': req.user }
+        { owner: req.user._id },
+        { 'sharedWith.user': req.user._id }
       ]
     }).populate('owner', 'firstName lastName email')
       .populate('sharedWith.user', 'firstName lastName email');
@@ -61,8 +61,8 @@ export const updateList = async (req: Request, res: Response): Promise<void> => 
     const list = await List.findOne({
       _id: req.params.id,
       $or: [
-        { owner: req.user },
-        { 'sharedWith.user': req.user, 'sharedWith.access': 'Edit' }
+        { owner: req.user._id },
+        { 'sharedWith.user': req.user._id, 'sharedWith.access': 'Edit' }
       ]
     });
 
@@ -87,7 +87,7 @@ export const deleteList = async (req: Request, res: Response): Promise<void> => 
   try {
     const list = await List.findOne({
       _id: req.params.id,
-      owner: req.user
+      owner: req.user._id
     });
 
     if (!list) {

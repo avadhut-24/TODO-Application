@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from '../api/axios';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import DeleteListModal from '../components/DeleteListModal';
 import { useNavigate } from 'react-router-dom';
 
@@ -37,7 +37,7 @@ const HomePage = () => {
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
 
 
-  // ✅ Fetch existing lists
+
   const fetchLists = async () => {
     try {
       const res = await axios.get<ApiTodoList[]>('/lists');
@@ -58,7 +58,7 @@ const HomePage = () => {
     fetchLists();
   }, []);
 
-  // ✅ Create list in DB
+
   const handleAdd = async () => {
     if (!newTitle.trim()) {
       setError(true);
@@ -88,7 +88,6 @@ const HomePage = () => {
     }
   };
 
-  // ✅ Delete list
   const handleDelete = async (id: string) => {
     try {
       await axios.delete(`/lists/${id}`);

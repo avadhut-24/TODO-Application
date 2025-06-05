@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuth, type User } from '../context/AuthContext';
+import { useAuth, type User } from '../contexts/AuthContext';
 import { useState } from 'react';
 import axios from '../api/axios';
 import background from '../assets/background.png';
