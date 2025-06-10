@@ -1,8 +1,11 @@
 import { Server } from 'socket.io';
 import { Server as HttpServer } from 'http';
+import { Socket } from 'socket.io';
 import { IList } from './models/List.js';
+import jwt from 'jsonwebtoken';
 
 let io: Server;
+let socket: Socket;
 
 export const initializeSocket = (httpServer: HttpServer) => {
   io = new Server(httpServer, {
@@ -17,8 +20,20 @@ export const initializeSocket = (httpServer: HttpServer) => {
   // Store active list rooms
   const activeListRooms = new Map<string, Set<string>>();
 
-  io.on('connection', (socket) => {
+  io.on('connection', (newSocket) => {
+    socket = newSocket;
     console.log('Client connected:', socket.id);
+
+    // Authenticate user and join their user room
+    socket.on('authenticate', (token: string) => {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { userId: string };
+        socket.join(`user:${decoded.userId}`);
+        console.log(`User ${decoded.userId} authenticated and joined their room`);
+      } catch (error) {
+        console.error('Authentication error:', error);
+      }
+    });
 
     // Join list room
     socket.on('joinList', (listId: string) => {
