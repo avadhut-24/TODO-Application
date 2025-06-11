@@ -5,8 +5,11 @@ export interface IUser extends Document {
   firstName: string;
   lastName: string;
   email: string;
-  password: string;
+  password?: string;
+  googleId?: string;
   createdAt: Date;
+  resetPasswordOTP?: string;
+  resetPasswordOTPExpiry?: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
@@ -15,13 +18,13 @@ const userSchema = new Schema<IUser>({
     type: String,
     required: true,
     trim: true,
-    minlength: 2
+   
   },
   lastName: {
     type: String,
     required: true,
     trim: true,
-    minlength: 2
+
   },
   email: {
     type: String,
@@ -30,8 +33,23 @@ const userSchema = new Schema<IUser>({
   },
   password: {
     type: String,
-    required: true,
+    required: function() {
+      return !this.googleId; // Password is required only if googleId is not present
+    },
     minlength: 6
+  },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true // Allows null/undefined values while maintaining uniqueness
+  },
+  resetPasswordOTP: {
+    type: String,
+    select: false // Don't include in queries by default
+  },
+  resetPasswordOTPExpiry: {
+    type: Date,
+    select: false // Don't include in queries by default
   },
   createdAt: {
     type: Date,
@@ -41,7 +59,7 @@ const userSchema = new Schema<IUser>({
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
+  if (!this.isModified('password') || !this.password) return next();
   
   try {
     const salt = await bcrypt.genSalt(10);
@@ -54,6 +72,7 @@ userSchema.pre('save', async function(next) {
 
 // Method to compare password
 userSchema.methods.comparePassword = async function(candidatePassword: string): Promise<boolean> {
+  if (!this.password) return false;
   return bcrypt.compare(candidatePassword, this.password);
 };
 

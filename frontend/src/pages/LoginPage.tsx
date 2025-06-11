@@ -34,15 +34,19 @@ const Login = () => {
     }
   };
 
+  const handleGoogleLogin = () => {
+    window.location.href = `${import.meta.env.VITE_API_URL}/api/auth/google`;
+  };
+
   return (
     <div className='flex h-full'>
       <div className='w-1/2'>
         <form onSubmit={handleSubmit} className='flex flex-col gap-4 mx-28 my-10'>
           <h1 className='font-bold text-xl mb-4'>Login to TODO</h1>
 
-          <div className='flex gap-2 border border-gray-300 rounded-md p-2 bg-[#2828280A] justify-center items-center'>
+          <div className='flex gap-2 border border-gray-300 rounded-md p-2 bg-[#2828280A] justify-center items-center cursor-pointer hover:bg-gray-100' onClick={handleGoogleLogin}>
             <img src={googleIcon} alt="google icon" />
-            <button type="button">Continue with Email</button>
+            <button type="button">Continue with Google</button>
           </div>
 
           <div className='flex justify-center items-center'>
@@ -82,7 +86,12 @@ const Login = () => {
             </button>
           </div>
 
-          <h5 className='text-right font-semibold cursor-pointer'>Reset Password</h5>
+          <h5 
+            className='text-right font-semibold cursor-pointer hover:text-red-600'
+            onClick={() => navigate('/reset-password')}
+          >
+            Reset Password
+          </h5>
 
           <button type="submit" className='bg-[#9E9E9E] text-white p-2 rounded-md'>
             Login

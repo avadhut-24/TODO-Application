@@ -59,23 +59,39 @@ export const getList = async (req: Request, res: Response): Promise<void> => {
 export const updateList = async (req: Request, res: Response): Promise<void> => {
   try {
     const list = await List.findOne({
-      _id: req.params.id,
+      _id: req.params.listId,
       $or: [
-        { owner: req.user._id },
-        { 'sharedWith.user': req.user._id, 'sharedWith.access': 'Edit' }
+        { owner: req.user },
+        { 'sharedWith.user': req.user, 'sharedWith.access': 'Edit' }
       ]
-    });
+    }).populate('owner', 'firstName lastName email')
+      .populate('sharedWith.user', 'firstName lastName email')
+      .populate('tasks');
 
     if (!list) {
-      res.status(404).json({ message: 'List not found or no permission' });
+      res.status(404).json({ message: 'List not found' });
       return;
     }
 
-    const { title, sharedWith } = req.body;
+    const { title } = req.body;
     if (title) list.title = title;
-    if (sharedWith) list.sharedWith = sharedWith;
 
     await list.save();
+
+    // Get all users who have access to this list
+    const usersWithAccess = [
+      list.owner._id.toString(),
+      ...list.sharedWith.map(share => share.user._id.toString())
+    ];
+
+    // Emit update event to all users with access
+    const io = getIO();
+    usersWithAccess.forEach(userId => {
+      io.to(`user:${userId}`).emit('listnameUpdated', list);
+      console.log("list updation event emitted successfully!")
+      console.log("To user", userId);
+    });
+
     res.json(list);
   } catch (error) {
     res.status(400).json({ message: (error as Error).message });
@@ -87,15 +103,28 @@ export const deleteList = async (req: Request, res: Response): Promise<void> => 
   try {
     const list = await List.findOne({
       _id: req.params.id,
-      owner: req.user._id
-    });
+      owner: req.user
+    }).populate('sharedWith');
 
     if (!list) {
       res.status(404).json({ message: 'List not found or no permission' });
       return;
     }
 
+    // Get all users who have access to this list (shared users)
+    const usersWithAccess = [
+      list.sharedWith.map(share => share.user.toString())
+    ];
+
     await list.deleteOne();
+
+    // Emit delete event to all users with access
+    const io = getIO();
+    usersWithAccess.forEach(userId => {
+      io.to(`user:${userId}`).emit('listDeleted', { listId: list._id });
+    });
+    console.log('listDelete event emitted successfully');
+
     res.json({ message: 'List deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: (error as Error).message });
@@ -148,6 +177,9 @@ export const shareList = async (req: Request, res: Response): Promise<void> => {
     // Emit update to all users in the list room
     const io = getIO();
     io.to(`list:${listId}`).emit('listUpdated', updatedList);
+    
+    // Emit a specific event to the user being shared with
+    io.to(`user:${userToShare._id}`).emit('listShared', updatedList);
 
     res.json(updatedList);
   } catch (error) {
@@ -185,6 +217,9 @@ export const removeShare = async (req: Request, res: Response): Promise<void> =>
     // Emit update to all users in the list room
     const io = getIO();
     io.to(`list:${listId}`).emit('listUpdated', list);
+    
+    // Emit a specific event to the user whose access was removed
+    io.to(`user:${userId}`).emit('listUnshared', { listId });
 
     res.json(list);
   } catch (error) {

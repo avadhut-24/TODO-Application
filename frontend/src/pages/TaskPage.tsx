@@ -58,9 +58,9 @@ interface PersonAccess {
 const TaskPage = () => {
   const { listId } = useParams<{ listId: string }>();
   const navigate = useNavigate();
-  const { socket, joinList, leaveList } = useSocketContext();
+  const { socket, joinList, leaveList, isConnected } = useSocketContext();
   
-  const [listTitle, setListTitle] = useState('Brainstorming over things');
+  const [listTitle, setListTitle] = useState('');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
   const [isEditTaskModalOpen, setIsEditTaskModalOpen] = useState(false);
@@ -68,6 +68,7 @@ const TaskPage = () => {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [peopleWithAccess, setPeopleWithAccess] = useState<PersonAccess[]>([]);
+  const [showDeleteAlert, setShowDeleteAlert] = useState(false);
 
   const handleAddTask = async (taskData: { title: string; status: string; priority: string }) => {
     try {
@@ -273,7 +274,27 @@ const TaskPage = () => {
       joinList(listId);
       return () => leaveList(listId);
     }
-  }, [listId, joinList, leaveList]);
+  }, [listId, joinList, leaveList, isConnected]);
+
+  // Listen for list deletion
+  useEffect(() => {
+    if (socket) {
+      const handleListDeleted = ({ listId: deletedListId }: { listId: string }) => {
+        if (deletedListId === listId) {
+          setShowDeleteAlert(true);
+          setTimeout(() => {
+            navigate('/home');
+          }, 3000);
+        }
+      };
+
+      socket.on('listDeleted', handleListDeleted);
+
+      return () => {
+        socket.off('listDeleted', handleListDeleted);
+      };
+    }
+  }, [socket, listId, navigate, isConnected]);
 
   // Socket event listeners
   useEffect(() => {
@@ -306,17 +327,24 @@ const TaskPage = () => {
         setPeopleWithAccess(people);
       };
 
+      const handleListNameUpdate = (updatedList: ListResponse) => {
+        console.log('Received listnameUpdated event:', updatedList);
+        setListTitle(updatedList.title);
+      };
+
       socket.on('listUpdated', handleListUpdate);
+      socket.on('listnameUpdated', handleListNameUpdate);
       console.log('listUpdated listener set up successfully');
 
       return () => {
         console.log('Cleaning up listUpdated listener');
         socket.off('listUpdated', handleListUpdate);
+        socket.off('listnameUpdated', handleListNameUpdate);
       };
     } else {
       console.warn('Socket not available in TaskPage');
     }
-  }, [socket]);
+  }, [socket, isConnected]);
 
   const formatDate = (isoDate: string) => {
     const d = new Date(isoDate);
@@ -330,140 +358,147 @@ const TaskPage = () => {
   const completedCount = tasks.filter(t => t.status === 'Completed').length;
 
   return (
-    <div className="min-h-screen bg-white px-6 py-6 text-black font-sans">
-      {/* Header */}
-      <div className="flex justify-between items-start mb-4">
-        <button onClick={() => navigate('/home')} className="text-sm text-gray-600 hover:text-black">← Back</button>
-        <div className='flex items-center space-x-3'>
-          <div className="text-sm text-gray-500">
-            {peopleWithAccess.length > 0 ? `${peopleWithAccess.length} people have access` : 'Not Shared'}
-          </div>
-          <button 
-            onClick={() => setIsShareModalOpen(true)}
-            className="bg-red-600 text-white px-4 py-2 rounded-md"
-          >
-            Share
-          </button>
+    <div className="relative">
+      {showDeleteAlert && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded z-50">
+          <p>This list has been deleted by the owner</p>
         </div>
-      </div>
+      )}
+      <div className="min-h-screen bg-white px-6 py-6 text-black font-sans">
+        {/* Header */}
+        <div className="flex justify-between items-start mb-4">
+          <button onClick={() => navigate('/home')} className="text-sm text-gray-600 hover:text-black">← Back</button>
+          <div className='flex items-center space-x-3'>
+            <div className="text-sm text-gray-500">
+              {peopleWithAccess.length > 0 ? `${peopleWithAccess.length} people have access` : 'Not Shared'}
+            </div>
+            <button 
+              onClick={() => setIsShareModalOpen(true)}
+              className="bg-red-600 text-white px-4 py-2 rounded-md"
+            >
+              Share
+            </button>
+          </div>
+        </div>
 
-      {/* Title + Meta */}
-      <h1 className="text-xl font-bold underline underline-offset-2 mb-2">{listTitle}</h1>
-      <div className="flex items-center gap-6 text-sm text-gray-600 mb-6">
-        <div>🕒 {tasks[0] ? formatDate(tasks[0].createdAt) : '—'}</div>
-        <div>📋 {completedCount}/{tasks.length} tasks completed</div>
-      </div>
+        {/* Title + Meta */}
+        <h1 className="text-xl font-bold underline underline-offset-2 mb-2">{listTitle}</h1>
+        <div className="flex items-center gap-6 text-sm text-gray-600 mb-6">
+          <div>🕒 {tasks[0] ? formatDate(tasks[0].createdAt) : '—'}</div>
+          <div>📋 {completedCount}/{tasks.length} tasks completed</div>
+        </div>
 
-      {/* Table Header */}
-      <div className="grid grid-cols-6 font-medium text-sm text-gray-500 border-b border-gray-200 pb-2 mb-2">
-        <div>Type</div>
-        <div>Task Name</div>
-        <div>Status</div>
-        <div>Created on</div>
-        <div>Priority</div>
-        <div>Actions</div>
-      </div>
+        {/* Table Header */}
+        <div className="grid grid-cols-6 font-medium text-sm text-gray-500 border-b border-gray-200 pb-2 mb-2">
+          <div>Type</div>
+          <div>Task Name</div>
+          <div>Status</div>
+          <div>Created on</div>
+          <div>Priority</div>
+          <div>Actions</div>
+        </div>
 
-      {/* Tasks */}
-      {tasks.map(task => (
-        <div key={task._id} className="grid grid-cols-6 items-center text-sm py-2 border-b border-gray-100">
-          <div>
-            <div className="relative">
-              <input 
-                type="checkbox" 
-                className={`w-4 h-4 appearance-none border-2 rounded border-gray-300 cursor-pointer
-                  ${task.status === 'Completed' ? 'bg-green-500 border-green-500' : 'hover:border-gray-400'}`}
-                checked={task.status === 'Completed'}
-                readOnly
-              />
-              {task.status === 'Completed' && (
-                <svg 
-                  className="absolute top-0 left-0 w-4 h-4 text-white pointer-events-none" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth="2" 
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-              )}
+        {/* Tasks */}
+        {tasks.map(task => (
+          <div key={task._id} className="grid grid-cols-6 items-center text-sm py-2 border-b border-gray-100">
+            <div>
+              <div className="relative">
+                <input 
+                  type="checkbox" 
+                  className={`w-4 h-4 appearance-none border-2 rounded border-gray-300 cursor-pointer
+                    ${task.status === 'Completed' ? 'bg-green-500 border-green-500' : 'hover:border-gray-400'}`}
+                  checked={task.status === 'Completed'}
+                  readOnly
+                />
+                {task.status === 'Completed' && (
+                  <svg 
+                    className="absolute top-0 left-0 w-4 h-4 text-white pointer-events-none" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth="2" 
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                )}
+              </div>
+            </div>
+            <div>{task.name}</div>
+            <div>
+              <span className="px-2 py-1 rounded-md border text-xs text-gray-700 bg-gray-100">
+                {task.status}
+              </span>
+            </div>
+            <div>{formatDate(task.createdAt)}</div>
+            <div>{task.priority}</div>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => handleEditClick(task)}
+                className="text-gray-600 hover:text-blue-600"
+              >
+                ✏️
+              </button>
+              <button 
+                onClick={() => handleDeleteClick(task)}
+                className="text-gray-600 hover:text-red-600"
+              >
+                🗑️
+              </button>
             </div>
           </div>
-          <div>{task.name}</div>
-          <div>
-            <span className="px-2 py-1 rounded-md border text-xs text-gray-700 bg-gray-100">
-              {task.status}
-            </span>
-          </div>
-          <div>{formatDate(task.createdAt)}</div>
-          <div>{task.priority}</div>
-          <div className="flex gap-2">
-            <button 
-              onClick={() => handleEditClick(task)}
-              className="text-gray-600 hover:text-blue-600"
-            >
-              ✏️
-            </button>
-            <button 
-              onClick={() => handleDeleteClick(task)}
-              className="text-gray-600 hover:text-red-600"
-            >
-              🗑️
-            </button>
-          </div>
+        ))}
+
+        {/* Add Task */}
+        <div className="mt-4">
+          <button 
+            onClick={() => setIsAddTaskModalOpen(true)}
+            className="text-red-600 text-sm font-medium hover:underline"
+          >
+            + Add Task
+          </button>
         </div>
-      ))}
 
-      {/* Add Task */}
-      <div className="mt-4">
-        <button 
-          onClick={() => setIsAddTaskModalOpen(true)}
-          className="text-red-600 text-sm font-medium hover:underline"
-        >
-          + Add Task
-        </button>
+        <AddTaskModal
+          isOpen={isAddTaskModalOpen}
+          onClose={() => setIsAddTaskModalOpen(false)}
+          onSave={handleAddTask}
+        />
+
+        <AddTaskModal
+          isOpen={isEditTaskModalOpen}
+          onClose={() => {
+            setIsEditTaskModalOpen(false);
+            setSelectedTask(null);
+          }}
+          onSave={handleEditTask}
+          initialData={selectedTask ? {
+            title: selectedTask.name,
+            status: selectedTask.status,
+            priority: selectedTask.priority
+          } : undefined}
+        />
+
+        <DeleteTaskModal
+          isOpen={isDeleteTaskModalOpen}
+          onCancel={() => {
+            setIsDeleteTaskModalOpen(false);
+            setSelectedTask(null);
+          }}
+          onConfirm={handleDeleteTask}
+        />
+
+        <ShareListModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          peopleWithAccess={peopleWithAccess}
+          onAddEmail={handleShareList}
+          onRemoveAccess={handleRemoveShare}
+        />
       </div>
-
-      <AddTaskModal
-        isOpen={isAddTaskModalOpen}
-        onClose={() => setIsAddTaskModalOpen(false)}
-        onSave={handleAddTask}
-      />
-
-      <AddTaskModal
-        isOpen={isEditTaskModalOpen}
-        onClose={() => {
-          setIsEditTaskModalOpen(false);
-          setSelectedTask(null);
-        }}
-        onSave={handleEditTask}
-        initialData={selectedTask ? {
-          title: selectedTask.name,
-          status: selectedTask.status,
-          priority: selectedTask.priority
-        } : undefined}
-      />
-
-      <DeleteTaskModal
-        isOpen={isDeleteTaskModalOpen}
-        onCancel={() => {
-          setIsDeleteTaskModalOpen(false);
-          setSelectedTask(null);
-        }}
-        onConfirm={handleDeleteTask}
-      />
-
-      <ShareListModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        peopleWithAccess={peopleWithAccess}
-        onAddEmail={handleShareList}
-        onRemoveAccess={handleRemoveShare}
-      />
     </div>
   );
 };

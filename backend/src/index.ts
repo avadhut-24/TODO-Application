@@ -7,6 +7,7 @@ import { initializeSocket } from './socket.js';
 import authRoutes from './routes/authRoutes.js';
 import listRoutes from './routes/listRoutes.js';
 import taskRoutes from './routes/taskRoutes.js';
+import passport from './config/passport.js';
 
 dotenv.config();
 
@@ -15,6 +16,9 @@ const httpServer = createServer(app);
 
 // Initialize WebSocket
 initializeSocket(httpServer);
+
+// Initialize Passport
+app.use(passport.initialize());
 
 // CORS configuration
 app.use(cors({

@@ -6,7 +6,7 @@ import { checkListEditAccess } from '../middleware/checkListAccess.js';
 const router = Router();
 
 // All routes are protected with authentication
-router.use(auth);
+router.use(auth as RequestHandler);
 
 // Create a new list
 router.post('/', createList as RequestHandler);
@@ -18,7 +18,7 @@ router.get('/', getLists as RequestHandler);
 router.get('/:id', getList as RequestHandler);
 
 // Update a list (requires edit access)
-router.put('/:id', checkListEditAccess as RequestHandler, updateList as RequestHandler);
+router.put('/:listId', checkListEditAccess as RequestHandler, updateList as RequestHandler);
 
 // Delete a list (only owner can delete)
 router.delete('/:id', deleteList as RequestHandler);

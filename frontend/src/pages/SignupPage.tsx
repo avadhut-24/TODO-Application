@@ -36,15 +36,20 @@ const SignupPage: React.FC = () => {
       alert('Invalid credentials. Please try again.');
     }
   };
+
+  const handleGoogleSignup = () => {
+    window.location.href = `${import.meta.env.VITE_API_URL}/api/auth/google`;
+  };
+
   return (
     <div className='flex h-full'>
     <div className='w-1/2'>
       <form onSubmit={handleSubmit} className='flex flex-col gap-4 mx-28 my-10'>
         <h1 className='font-bold text-xl mb-4'>Sign Up to TODO</h1>
 
-        <div className='flex gap-2 border border-gray-300 rounded-md p-2 bg-[#2828280A] justify-center items-center'>
+        <div className='flex gap-2 border border-gray-300 rounded-md p-2 bg-[#2828280A] justify-center items-center cursor-pointer hover:bg-gray-100' onClick={handleGoogleSignup}>
           <img src={googleIcon} alt="google icon" />
-          <button type="button">Continue with Email</button>
+          <button type="button">Continue with Google</button>
         </div>
 
         <div className='flex justify-center items-center'>

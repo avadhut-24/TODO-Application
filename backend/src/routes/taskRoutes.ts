@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { RequestHandler } from 'express';
 import { createTask, getTasks, getTask, updateTask, deleteTask } from '../controllers/taskController.js';
 import { auth } from '../middleware/auth.js';
 import { checkListEditAccess } from '../middleware/checkListAccess.js';
@@ -6,13 +6,13 @@ import { checkListEditAccess } from '../middleware/checkListAccess.js';
 const router = express.Router();
 
 // All routes require authentication
-router.use(auth);
+router.use(auth as RequestHandler);
 
 // All routes include listId parameter
-router.post('/:listId', checkListEditAccess, createTask);
-router.get('/', getTasks);
-router.get('/:id', getTask);
-router.put('/:listId/:id', checkListEditAccess, updateTask);
-router.delete('/:listId/:id', checkListEditAccess, deleteTask);
+router.post('/:listId', checkListEditAccess as RequestHandler, createTask as RequestHandler);
+router.get('/', getTasks as RequestHandler);
+router.get('/:id', getTask as RequestHandler);
+router.put('/:listId/:id', checkListEditAccess as RequestHandler, updateTask as RequestHandler);
+router.delete('/:listId/:id', checkListEditAccess as RequestHandler, deleteTask as RequestHandler);
 
 export default router; 
