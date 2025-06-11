@@ -16,7 +16,7 @@ const ResetPasswordRequest = () => {
     setError('');
 
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/reset-password-request', { email });
+      await axios.post('http://localhost:5000/api/auth/reset-password-request', { email });
       setSuccess(true);
       // Store email in sessionStorage for OTP verification
       sessionStorage.setItem('resetEmail', email);

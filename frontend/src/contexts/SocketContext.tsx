@@ -20,7 +20,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [socket, setSocket] = useState<SocketType | null>(null);
   const socketRef = useRef<SocketType | null>(null);
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
 
   // Only initialize socket when user is authenticated and not loading
   useEffect(() => {
